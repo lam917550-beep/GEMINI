@@ -1,6 +1,4 @@
-pyTelegramBotAPI>=4.29,<5
-Flask>=3.1,<4
-requests>=2.32,<3
-qrcode[pil]>=8,<9
-google-genai>=2,<3
-gunicorn>=23,<24
+python-telegram-bot[job-queue]==22.8
+python-dotenv==1.2.3
+google-genai>=2.22,<3
+Pillow>=11.3,<12
