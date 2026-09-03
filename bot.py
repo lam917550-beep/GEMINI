@@ -121,7 +121,7 @@ async def save_user_async(user_id):
 load_users()
 
 # =========================================================
-# TỪ ĐIỂN VĂN BẢN (NẠP SẴN VÀO RAM ĐỂ PHẢN HỒI 0.01 GIÂY)
+# TỪ ĐIỂN VĂN BẢN (ĐÃ SỬA LỖI HTML TAG TRONG HELP)
 # =========================================================
 TEXTS = {
     "vi": {
@@ -133,20 +133,20 @@ TEXTS = {
             "👑 <b>Chủ bot:</b> @itznvl\n\n"
             "• `/language` - Đổi ngôn ngữ (Việt / Anh)\n"
             "• `/myid` - Xem ID Telegram của bạn\n"
-            "• `/img <mô tả>` - Vẽ ảnh AI chất lượng cao\n"
-            "• `/tts <văn bản>` - Chuyển văn bản thành giọng nói\n"
-            "• `/thoitiet <thành phố>` - Xem thời tiết thời gian thực\n"
-            "• `/dich <văn bản>` - Dịch thuật đa ngôn ngữ siêu tốc\n"
-            "• `/code <yêu cầu>` - Lập trình & Debug mã nguồn\n"
-            "• `/toan <bài toán>` - Giải toán chi tiết từng bước\n"
-            "• `/crypto <coin>` - Tra cứu giá tiền mã hóa (BTC, ETH...)\n"
+            "• `/img [mô tả]` - Vẽ ảnh AI chất lượng cao\n"
+            "• `/tts [văn bản]` - Chuyển văn bản thành giọng nói\n"
+            "• `/thoitiet [thành phố]` - Xem thời tiết thời gian thực\n"
+            "• `/dich [văn bản]` - Dịch thuật đa ngôn ngữ siêu tốc\n"
+            "• `/code [yêu cầu]` - Lập trình & Debug mã nguồn\n"
+            "• `/toan [bài toán]` - Giải toán chi tiết từng bước\n"
+            "• `/crypto [coin]` - Tra cứu giá tiền mã hóa (BTC, ETH...)\n"
             "• `/password [độ dài]` - Tạo mật khẩu siêu bảo mật ngẫu nhiên\n"
-            "• `/ascii <chữ>` - Biến văn bản thành nghệ thuật chữ ASCII\n"
-            "• `/check <câu>` - Sửa lỗi ngữ pháp\n"
-            "• `/nhac <giây> <nội dung>` - Đặt lịch hẹn nhắc nhở\n"
-            "• `/qr <text>` - Tạo mã QR nhanh\n"
+            "• `/ascii [chữ]` - Biến văn bản thành nghệ thuật chữ ASCII\n"
+            "• `/check [câu]` - Sửa lỗi ngữ pháp\n"
+            "• `/nhac [giây] [nội dung]` - Đặt lịch hẹn nhắc nhở\n"
+            "• `/qr [text]` - Tạo mã QR nhanh\n"
             "• `/quiz` - Chơi đố vui kiến thức\n"
-            "• `/tiente <số> <từ> sang <đến>` - Đổi ngoại tệ\n"
+            "• `/tiente [số] [từ] sang [đến]` - Đổi ngoại tệ\n"
             "• `/vui` - Câu nói hay / Truyện cười thư giãn\n"
             "• `/export` - Xuất file lịch sử chat (.txt)\n"
             "• `/reset` - Làm mới bộ nhớ đệm ngữ cảnh (Reset AI)\n\n"
@@ -173,20 +173,20 @@ TEXTS = {
             "👑 <b>Bot Owner:</b> @itznvl\n\n"
             "• `/language` - Change language (English / Vietnamese)\n"
             "• `/myid` - Check your Telegram ID\n"
-            "• `/img <prompt>` - Generate high-quality AI art\n"
-            "• `/tts <text>` - Convert text to natural voice message\n"
-            "• `/thoitiet <city>` - Real-time weather forecast\n"
-            "• `/dich <text>` - Instant multi-language translation\n"
-            "• `/code <request>` - Write & debug programming code\n"
-            "• `/toan <math problem>` - Step-by-step math solver\n"
-            "• `/crypto <coin>` - Check cryptocurrency prices (BTC, ETH...)\n"
+            "• `/img [prompt]` - Generate high-quality AI art\n"
+            "• `/tts [text]` - Convert text to natural voice message\n"
+            "• `/thoitiet [city]` - Real-time weather forecast\n"
+            "• `/dich [text]` - Instant multi-language translation\n"
+            "• `/code [request]` - Write & debug programming code\n"
+            "• `/toan [math problem]` - Step-by-step math solver\n"
+            "• `/crypto [coin]` - Check cryptocurrency prices (BTC, ETH...)\n"
             "• `/password [length]` - Generate secure random passwords\n"
-            "• `/ascii <text>` - Turn text into cool ASCII text art\n"
-            "• `/check <sentence>` - Fix grammar errors\n"
-            "• `/nhac <seconds> <msg>` - Set a quick timer reminder\n"
-            "• `/qr <text>` - Generate instant QR code\n"
+            "• `/ascii [text]` - Turn text into cool ASCII text art\n"
+            "• `/check [sentence]` - Fix grammar errors\n"
+            "• `/nhac [seconds] [msg]` - Set a quick timer reminder\n"
+            "• `/qr [text]` - Generate instant QR code\n"
             "• `/quiz` - Play fun trivia quiz games\n"
-            "• `/tiente <amount> <from> to <to>` - Currency converter\n"
+            "• `/tiente [amount] [from] to [to]` - Currency converter\n"
             "• `/vui` - Daily quotes & jokes\n"
             "• `/export` - Export chat history to .txt file\n"
             "• `/reset` - Reset conversation context memory\n\n"
@@ -205,7 +205,6 @@ TEXTS = {
         }
     }
 }
-
 def get_user_lang(uid):
     return user_languages.get(uid, "vi")
 
