@@ -2,3 +2,6 @@ python-telegram-bot
 python-dotenv
 google-genai
 flask
+aiohttp
+beautifulsoup4
+gTTS
