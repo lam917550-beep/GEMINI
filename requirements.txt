@@ -1,4 +1,7 @@
-python-telegram-bot
-python-dotenv
 google-genai
+python-telegram-bot
 flask
+python-dotenv
+pypdf
+beautifulsoup4
+requests
