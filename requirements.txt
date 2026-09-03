@@ -1,4 +1,4 @@
-python-telegram-bot[job-queue]==22.8
-python-dotenv==1.2.3
-google-genai==2.22.0
-Pillow==11.3.0
+python-telegram-bot
+python-dotenv
+google-genai
+flask
