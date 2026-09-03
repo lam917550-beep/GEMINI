@@ -1,8 +1,3 @@
-python-telegram-bot
-python-dotenv
-google-genai
-flask
-aiohttp
-beautifulsoup4
-gtts
-pypdf
+python-telegram-bot==22.8
+python-dotenv==1.2.3
+google-genai==2.22.0
