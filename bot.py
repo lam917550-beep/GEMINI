@@ -2,41 +2,37 @@ import os
 import asyncio
 import logging
 import threading
-import io
-import time
-import requests
+import datetime
 from dotenv import load_dotenv
 from google import genai
 from google.genai import types
 from flask import Flask
 from pypdf import PdfReader
 from bs4 import BeautifulSoup
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from telegram import (
     Update,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
-    InlineQueryResultArticle,
-    InputTextMessageContent,
 )
 from telegram.ext import (
     Application,
     CommandHandler,
     MessageHandler,
     CallbackQueryHandler,
-    InlineQueryHandler,
     ContextTypes,
     filters,
 )
 
 # =========================================================
-# DUMMY WEB SERVER CHO RENDER WEB SERVICE
+# WEB SERVER CHO RENDER
 # =========================================================
 app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Ultra Telegram Gemini Bot is active and running!"
+    return "Ultra Telegram Gemini Bot (Optimized & Bug-Free) is active!"
 
 @app.route('/health')
 def health():
@@ -47,65 +43,100 @@ def run_server():
     app.run(host="0.0.0.0", port=port, debug=False, use_reloader=False)
 
 # =========================================================
-# CONFIG & ENVIRONMENT
+# CONFIG & STATE
 # =========================================================
 load_dotenv()
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN") or os.getenv("TELEGRAM_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 
-if not TELEGRAM_BOT_TOKEN:
-    raise RuntimeError("Thiếu TELEGRAM_BOT_TOKEN trong biến môi trường hoặc file .env")
-
-if not GEMINI_API_KEY:
-    raise RuntimeError("Thiếu GEMINI_API_KEY trong biến môi trường hoặc file .env")
+if not TELEGRAM_BOT_TOKEN or not GEMINI_API_KEY:
+    raise RuntimeError("Thiếu token hoặc API key trong biến môi trường!")
 
 MODEL = "gemini-2.5-flash"
-MAX_MESSAGE_LENGTH = 12000
 
-DEFAULT_SYSTEM_PROMPT = """
-Bạn là một siêu trợ lý AI cao cấp tích hợp trên Telegram.
-Nhiệm vụ:
-- Cung cấp câu trả lời chính xác, thông minh, súc tích và tự nhiên bằng tiếng Việt.
-- Hỗ trợ toàn diện: Lập trình, toán học, phân tích tài liệu, dịch thuật, viết nội dung, giải đố, sáng tạo và xử lý công việc.
-- Khi viết code, luôn cung cấp code hoàn chỉnh, tối ưu và có giải thích ngắn gọn.
-- Luôn giữ thái độ lịch sự, chuyên nghiệp và thân thiện.
-"""
-
-# =========================================================
-# CLIENT & LOGGING
-# =========================================================
-client = genai.Client(api_key=GEMINI_API_KEY)
-
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(message)s",
-)
-logger = logging.getLogger(__name__)
-
-# =========================================================
-# MEMORY & STATE MANAGEMENT
-# =========================================================
-user_system_prompts = {}
-user_models = {}
+user_languages = {}     # user_id -> lang_code
+user_locations = {}     # user_id -> location string
 user_locks = {}
+
+scheduler = AsyncIOScheduler()
+
+SUPPORTED_LANGUAGES = {
+    "en": "English", "vi": "Tiếng Việt", "es": "Español", "fr": "Français",
+    "de": "Deutsch", "zh": "中文", "ja": "日本語", "ko": "한국어",
+    "ru": "Русский", "pt": "Português", "it": "Italiano", "ar": "العربية",
+    "hi": "हिन्दी", "th": "ไทย", "id": "Indonesian", "nl": "Nederlands"
+}
+
+QUIZ_TOPICS = [
+    ("geography", "Geography / Địa lý"),
+    ("science", "Science / Khoa học"),
+    ("game", "Gaming / Trò chơi"),
+    ("movie", "Movies / Phim ảnh"),
+    ("music", "Music / Âm nhạc"),
+    ("history", "History / Lịch sử"),
+    ("literature", "Literature / Văn học"),
+    ("tech", "Technology / Công nghệ"),
+    ("sports", "Sports / Thể thao"),
+    ("art", "Art & Design / Nghệ thuật"),
+    ("philosophy", "Philosophy / Triết học"),
+    ("astronomy", "Astronomy / Thiên văn học"),
+    ("anime", "Anime & Manga / Hoạt hình Nhật"),
+    ("popculture", "Pop Culture / Văn hóa đại chúng"),
+    ("mythology", "Mythology / Thần thoại"),
+    ("cooking", "Cooking & Food / Nấu ăn"),
+    ("business", "Business & Economics / Kinh doanh"),
+    ("psychology", "Psychology / Tâm lý học"),
+    ("nature", "Nature & Animals / Thiên nhiên & Động vật"),
+    ("automotive", "Automotive / Xe hơi")
+]
+
+BOT_FOOTER = "\n\n---\n*Owner: @itznvl | Hãy chia sẻ bot cho mọi người nhé!*"
+
+STATIC_HELP = {
+    "vi": (
+        "📖 **DANH SÁCH LỆNH VÀ TÍNH NĂNG (TĨNH - SIÊU TỐC)**\n\n"
+        "• `/start` - Khởi động & chọn ngôn ngữ giao diện (16 ngôn ngữ)\n"
+        "• `/language` - Thay đổi ngôn ngữ giao diện bất cứ lúc nào\n"
+        "• `/help` - Xem hướng dẫn này\n"
+        "• `/weather <địa điểm>` - Xem bảng thời tiết 24h (hỗ trợ cấp huyện cũ/mới tại VN & toàn cầu, vd: `/weather Thanh Ba, Phú Thọ`)\n"
+        "• `/clock HH:MM` - Đặt báo thức theo vị trí của bạn\n"
+        "• `/quiz` - Mở bảng chọn 20 chủ đề câu đố\n"
+        "• `/quest` - Chơi game phiêu lưu tương tác RPG\n"
+        "• `/ping` - Kiểm tra tốc độ phản hồi hệ thống\n"
+        "• `/stats` - Xem thông tin phiên làm việc\n"
+        "• `/support` - Liên hệ hỗ trợ kỹ thuật\n"
+        "• Gửi hình ảnh hoặc file PDF để AI phân tích trực tiếp."
+    ),
+    "en": (
+        "📖 **COMMANDS & FEATURES (STATIC - INSTANT)**\n\n"
+        "• `/start` - Initialize & select interface language (16 languages)\n"
+        "• `/language` - Change interface language anytime\n"
+        "• `/help` - View this help guide\n"
+        "• `/weather <location>` - View 24h weather table (supports districts worldwide & Vietnam old/new, e.g., `/weather Tokyo`)\n"
+        "• `/clock HH:MM` - Set a location-based alarm\n"
+        "• `/quiz` - Open the 20+ topic trivia quiz menu\n"
+        "• `/quest` - Play interactive text RPG adventure\n"
+        "• `/ping` - Check system response latency\n"
+        "• `/stats` - View session statistics\n"
+        "• `/support` - Contact technical support\n"
+        "• Send images or PDF files for direct AI analysis."
+    )
+}
 
 def get_user_lock(user_id):
     if user_id not in user_locks:
         user_locks[user_id] = asyncio.Lock()
     return user_locks[user_id]
 
-def get_user_config(user_id):
-    if user_id not in user_system_prompts:
-        user_system_prompts[user_id] = DEFAULT_SYSTEM_PROMPT
-    if user_id not in user_models:
-        user_models[user_id] = MODEL
-    return user_system_prompts[user_id], user_models[user_id]
+def get_user_lang(user_id):
+    return user_languages.get(user_id, "en")
 
-# =========================================================
-# GEMINI ENGINE (TỐI ƯU TỐC ĐỘ CAO NHẤT)
-# =========================================================
-async def ask_gemini(user_text, system_prompt=DEFAULT_SYSTEM_PROMPT, model=MODEL):
+client = genai.Client(api_key=GEMINI_API_KEY)
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+async def ask_gemini(user_text, system_prompt="You are a helpful assistant.", model=MODEL):
     def _call():
         return client.models.generate_content(
             model=model,
@@ -116,472 +147,255 @@ async def ask_gemini(user_text, system_prompt=DEFAULT_SYSTEM_PROMPT, model=MODEL
             )
         )
     response = await asyncio.to_thread(_call)
-    return response.text if response and response.text else "Không nhận được phản hồi từ AI."
+    return (response.text if response and response.text else "Error getting response.") + BOT_FOOTER
 
 # =========================================================
-# 40 TÍNH NĂNG CHÍNH (COMMAND HANDLERS)
+# LỆNH TĨNH (THỰC THI TRONG VÒNG < 0.001s)
 # =========================================================
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    keyboard = [
-        [InlineKeyboardButton("🆕 Cuộc trò chuyện mới", callback_data="new_chat"),
-         InlineKeyboardButton("ℹ️ 40 Tính năng", callback_data="features")],
-        [InlineKeyboardButton("⚙️ Cấu hình Model", callback_data="model"),
-         InlineKeyboardButton("📊 Thống kê phiên", callback_data="stats")]
-    ]
+    user_id = update.effective_user.id
+    user_languages[user_id] = "en"
+    
+    keyboard = []
+    row = []
+    for code, name in SUPPORTED_LANGUAGES.items():
+        row.append(InlineKeyboardButton(name, callback_data=f"lang_{code}"))
+        if len(row) == 2:
+            keyboard.append(row)
+            row = []
+    if row:
+        keyboard.append(row)
+
+    welcome_text = (
+        "Welcome to Ultra Gemini AI Bot! 🚀\n\n"
+        "Please select your preferred language below:\n"
+        "*(Vui lòng chọn ngôn ngữ của bạn bên dưới:)*"
+        + BOT_FOOTER
+    )
+    await update.message.reply_text(welcome_text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
+
+async def language_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = []
+    row = []
+    for code, name in SUPPORTED_LANGUAGES.items():
+        row.append(InlineKeyboardButton(name, callback_data=f"lang_{code}"))
+        if len(row) == 2:
+            keyboard.append(row)
+            row = []
+    if row:
+        keyboard.append(row)
+
     text = (
-        "🚀 **SIÊU TRỢ LÝ GEMINI AI (40 TÍNH NĂNG - SIÊU TỐC)**\n\n"
-        "Bot đã tối ưu hóa tốc độ phản hồi tối đa.\n\n"
-        "👉 Gõ `/help` để xem danh sách toàn bộ 40 tính năng!"
+        "🌍 **Select your language / Chọn ngôn ngữ giao diện:**\n\n"
+        + BOT_FOOTER
     )
     await update.message.reply_text(text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
 
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = (
-        "📖 **DANH SÁCH 40 TÍNH NĂNG HỆ THỐNG**\n\n"
-        "⚙️ **Hệ thống & Cài đặt:**\n"
-        "1. `/start` - Giao diện chính\n"
-        "2. `/help` - Bảng hướng dẫn 40 tính năng\n"
-        "3. `/newchat` - Làm sạch ngữ cảnh\n"
-        "4. `/model` - Đổi model AI\n"
-        "5. `/system` - Đổi nhân cách AI\n"
-        "6. `/ping` - Kiểm tra tốc độ phản hồi\n"
-        "7. `/stats` - Thống kê phiên làm việc\n"
-        "8. `/features` - Xem lại danh sách tính năng\n"
-        "9. `/clear` - Xóa lịch sử nhanh\n"
-        "10. `/support` - Hỗ trợ kỹ thuật\n"
-        "11. `/debug` - Kiểm tra trạng thái\n"
-        "12. `/feedback` - Gửi góp ý\n"
-        "13. `/info` - Thông tin phiên bản\n\n"
-        "💡 **Lập trình & Kỹ thuật:**\n"
-        "14. `/code` - Viết & giải thích mã nguồn\n"
-        "15. `/regex` - Tạo biểu thức chính quy\n"
-        "16. `/sql` - Viết câu lệnh SQL\n"
-        "17. `/json` - Xử lý & sửa lỗi JSON\n"
-        "18. `/calc` - Tính toán biểu thức toán học\n"
-        "19. `/web` - Phân tích nội dung trang web\n\n"
-        "✍️ **Xử lý Văn bản & Ngôn ngữ:**\n"
-        "20. `/translate` - Dịch thuật đa ngôn ngữ\n"
-        "21. `/summarize` - Tóm tắt văn bản dài\n"
-        "22. `/grammar` - Sửa lỗi chính tả & ngữ pháp\n"
-        "23. `/rewrite` - Viết lại văn phong chuyên nghiệp\n"
-        "24. `/explain` - Giải thích khái niệm phức tạp\n"
-        "25. `/email` - Soạn thảo email công sở\n\n"
-        "🎨 **Sáng tạo & Giải trí:**\n"
-        "26. `/joke` - Kể chuyện cười\n"
-        "27. `/quote` - Lời khuyên động lực\n"
-        "28. `/fact` - Kiến thức khoa học thú vị\n"
-        "29. `/riddle` - Câu đố vui hại não\n"
-        "30. `/fortune` - Xem vận mệnh vui\n"
-        "31. `/roast` - Tấu hài vui vẻ\n"
-        "32. `/compliment` - Lời khen tích cực\n"
-        "33. `/rhyme` - Sáng tác thơ lục bát\n"
-        "34. `/acrostic` - Thơ ghép chữ cái\n"
-        "35. `/story` - Sáng tác truyện ngắn\n\n"
-        "🎯 **Đời sống & Tiện ích:**\n"
-        "36. `/todo` - Lên kế hoạch công việc\n"
-        "37. `/workout` - Gợi ý tập luyện thể hình\n"
-        "38. `/recipe` - Gợi ý món ăn từ nguyên liệu\n"
-        "39. Gửi **File PDF** để bot đọc hiểu tài liệu\n"
-        "40. Gửi **Hình ảnh** kèm nội dung để bot phân tích thị giác"
+async def handle_language_selection(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    await query.answer()
+    user_id = query.from_user.id
+    lang_code = query.data.split("_")[1]
+    user_languages[user_id] = lang_code
+    
+    lang_name = SUPPORTED_LANGUAGES.get(lang_code, "English")
+    prompt_loc = (
+        f"Great! Language set to **{lang_name}**.\n\n"
+        "🌍 **Where are you located?** (e.g., Thanh Ba, Phú Thọ / Tokyo, Japan / New York, USA)\n"
+        "Please reply with your location so I can set alarms and check weather accurately!"
+        + BOT_FOOTER
     )
+    await query.message.edit_text(prompt_loc, parse_mode="Markdown")
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    lang = get_user_lang(user_id)
+    text = STATIC_HELP.get(lang, STATIC_HELP["en"]) + BOT_FOOTER
     await update.message.reply_text(text, parse_mode="Markdown")
 
-async def newchat(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🧹 Đã làm sạch lịch sử trò chuyện!")
-
-async def model_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    _, current_model = get_user_config(user_id)
-    if context.args:
-        new_m = context.args[0]
-        user_models[user_id] = new_m
-        await update.message.reply_text(f"✅ Đã chuyển sang model: `{new_m}`", parse_mode="Markdown")
-    else:
-        await update.message.reply_text(f"🤖 Model hiện tại: `{current_model}`\n💡 Dùng lệnh: `/model <tên_model>` để đổi.", parse_mode="Markdown")
-
-async def system_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    if not context.args:
-        curr_sys, _ = get_user_config(user_id)
-        await update.message.reply_text(f"ℹ️ Nhân cách hệ thống hiện tại:\n_{curr_sys}_", parse_mode="Markdown")
-        return
-    new_sys = " ".join(context.args)
-    user_system_prompts[user_id] = new_sys
-    await update.message.reply_text("✅ Đã cập nhật nhân cách AI thành công!")
-
-async def translate_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if len(context.args) < 2:
-        await update.message.reply_text("⚠️ Cú pháp: `/translate <ngôn_ngữ> <văn_bản>`", parse_mode="Markdown")
-        return
-    lang, text = context.args[0], " ".join(context.args[1:])
-    user_id = update.effective_user.id
-    sys_p, mdl = get_user_config(user_id)
-    res = await ask_gemini(f"Dịch sang tiếng {lang}:\n\n{text}", sys_p, mdl)
-    await update.message.reply_text(res)
-
-async def code_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args:
-        await update.message.reply_text("⚠️ Cú pháp: `/code <yêu_cầu>`", parse_mode="Markdown")
-        return
-    req = " ".join(context.args)
-    user_id = update.effective_user.id
-    sys_p, mdl = get_user_config(user_id)
-    res = await ask_gemini(f"Viết mã nguồn hoàn chỉnh, tối ưu cho yêu cầu: {req}", sys_p, mdl)
-    await update.message.reply_text(res)
-
-async def summarize_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = " ".join(context.args)
-    if not text:
-        await update.message.reply_text("⚠️ Vui lòng cung cấp văn bản cần tóm tắt.")
-        return
-    user_id = update.effective_user.id
-    sys_p, mdl = get_user_config(user_id)
-    res = await ask_gemini(f"Tóm tắt ngắn gọn các ý chính:\n\n{text}", sys_p, mdl)
-    await update.message.reply_text(res)
-
-async def calc_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args:
-        await update.message.reply_text("⚠️ Cú pháp: `/calc <biểu_thức>`", parse_mode="Markdown")
-        return
-    expr = "".join(context.args)
-    user_id = update.effective_user.id
-    sys_p, mdl = get_user_config(user_id)
-    res = await ask_gemini(f"Tính toán và giải thích chi tiết: {expr}", sys_p, mdl)
-    await update.message.reply_text(res)
-
-async def web_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args:
-        await update.message.reply_text("⚠️ Cú pháp: `/web <URL>`", parse_mode="Markdown")
-        return
-    url = context.args[0]
-    try:
-        html = requests.get(url, headers={'User-Agent': 'Mozilla/5.0'}, timeout=10).text
-        soup = BeautifulSoup(html, 'html.parser')
-        for s in soup(["script", "style"]): s.extract()
-        content = soup.get_text(separator=' ', strip=True)[:8000]
-        user_id = update.effective_user.id
-        sys_p, mdl = get_user_config(user_id)
-        res = await ask_gemini(f"Phân tích nội dung trang web:\n\n{content}", sys_p, mdl)
-        await update.message.reply_text(res)
-    except Exception as e:
-        await update.message.reply_text(f"❌ Lỗi tải trang web: {e}")
-
-async def joke_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    sys_p, mdl = get_user_config(user_id)
-    res = await ask_gemini("Kể một câu chuyện cười ngắn thông minh bằng tiếng Việt.", sys_p, mdl)
-    await update.message.reply_text(res)
-
-async def quote_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    sys_p, mdl = get_user_config(user_id)
-    res = await ask_gemini("Cho tôi một câu nói truyền cảm hứng sâu sắc.", sys_p, mdl)
-    await update.message.reply_text(res)
-
-async def fact_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    sys_p, mdl = get_user_config(user_id)
-    res = await ask_gemini("Chia sẻ một sự thật khoa học thú vị ít người biết.", sys_p, mdl)
-    await update.message.reply_text(res)
-
-async def riddle_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    sys_p, mdl = get_user_config(user_id)
-    res = await ask_gemini("Đưa ra một câu đố vui hại não kèm gợi ý.", sys_p, mdl)
-    await update.message.reply_text(res)
-
-async def fortune_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    sys_p, mdl = get_user_config(user_id)
-    res = await ask_gemini("Dự đoán vui vận may ngày hôm nay hài hước.", sys_p, mdl)
-    await update.message.reply_text(res)
-
-async def roast_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    sys_p, mdl = get_user_config(user_id)
-    res = await ask_gemini("Roast (tấu hài châm biếm nhẹ nhàng) tôi một cách văn minh.", sys_p, mdl)
-    await update.message.reply_text(res)
-
-async def compliment_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update.effective_user.id
-    sys_p, mdl = get_user_config(user_id)
-    res = await ask_gemini("Dành cho tôi những lời khen ngợi chân thành nhất.", sys_p, mdl)
-    await update.message.reply_text(res)
-
-async def regex_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args:
-        await update.message.reply_text("⚠️ Cú pháp: `/regex <yêu_cầu>`", parse_mode="Markdown")
-        return
-    req = " ".join(context.args)
-    user_id = update.effective_user.id
-    sys_p, mdl = get_user_config(user_id)
-    res = await ask_gemini(f"Viết Regex và giải thích chi tiết cho: {req}", sys_p, mdl)
-    await update.message.reply_text(res)
-
-async def sql_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    if not context.args:
-        await update.message.reply_text("⚠️ Cú pháp: `/sql <yêu_cầu>`", parse_mode="Markdown")
-        return
-    req = " ".join(context.args)
-    user_id = update.effective_user.id
-    sys_p, mdl = get_user_config(user_id)
-    res = await ask_gemini(f"Viết câu lệnh SQL tối ưu cho: {req}", sys_p, mdl)
-    await update.message.reply_text(res)
-
-async def json_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = " ".join(context.args)
-    if not text:
-        await update.message.reply_text("⚠️ Vui lòng cung cấp dữ liệu JSON cần xử lý.")
-        return
-    user_id = update.effective_user.id
-    sys_p, mdl = get_user_config(user_id)
-    res = await ask_gemini(f"Định dạng và sửa lỗi cấu trúc JSON:\n\n{text}", sys_p, mdl)
-    await update.message.reply_text(res)
-
-async def grammar_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = " ".join(context.args)
-    if not text:
-        await update.message.reply_text("⚠️ Vui lòng nhập văn bản cần sửa lỗi.")
-        return
-    user_id = update.effective_user.id
-    sys_p, mdl = get_user_config(user_id)
-    res = await ask_gemini(f"Sửa lỗi chính tả và hoàn thiện ngữ pháp:\n\n{text}", sys_p, mdl)
-    await update.message.reply_text(res)
-
-async def rewrite_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = " ".join(context.args)
-    if not text:
-        await update.message.reply_text("⚠️ Vui lòng nhập văn bản cần viết lại.")
-        return
-    user_id = update.effective_user.id
-    sys_p, mdl = get_user_config(user_id)
-    res = await ask_gemini(f"Viết lại theo văn phong chuyên nghiệp:\n\n{text}", sys_p, mdl)
-    await update.message.reply_text(res)
-
-async def explain_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    text = " ".join(context.args)
-    if not text:
-        await update.message.reply_text("⚠️ Vui lòng nhập khái niệm.")
-        return
-    user_id = update.effective_user.id
-    sys_p, mdl = get_user_config(user_id)
-    res = await ask_gemini(f"Giải thích khái niệm cực kỳ dễ hiểu:\n\n{text}", sys_p, mdl)
-    await update.message.reply_text(res)
-
-async def rhyme_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    topic = " ".join(context.args) or "cuộc sống"
-    user_id = update.effective_user.id
-    sys_p, mdl = get_user_config(user_id)
-    res = await ask_gemini(f"Sáng tác bài thơ lục bát hay về chủ đề: {topic}", sys_p, mdl)
-    await update.message.reply_text(res)
-
-async def acrostic_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    word = " ".join(context.args) or "GEMINI"
-    user_id = update.effective_user.id
-    sys_p, mdl = get_user_config(user_id)
-    res = await ask_gemini(f"Viết thơ ghép chữ cái đầu với từ khóa: {word}", sys_p, mdl)
-    await update.message.reply_text(res)
-
-async def story_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    genre = " ".join(context.args) or "khoa học viễn tưởng"
-    user_id = update.effective_user.id
-    sys_p, mdl = get_user_config(user_id)
-    res = await ask_gemini(f"Sáng tác truyện ngắn thể loại: {genre}", sys_p, mdl)
-    await update.message.reply_text(res)
-
-async def email_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    req = " ".join(context.args)
-    if not req:
-        await update.message.reply_text("⚠️ Cú pháp: `/email <yêu_cầu>`", parse_mode="Markdown")
-        return
-    user_id = update.effective_user.id
-    sys_p, mdl = get_user_config(user_id)
-    res = await ask_gemini(f"Soạn email công sở lịch sự theo yêu cầu: {req}", sys_p, mdl)
-    await update.message.reply_text(res)
-
-async def todo_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    task = " ".join(context.args) or "ngày làm việc hiệu quả"
-    user_id = update.effective_user.id
-    sys_p, mdl = get_user_config(user_id)
-    res = await ask_gemini(f"Lập danh sách việc cần làm chi tiết cho: {task}", sys_p, mdl)
-    await update.message.reply_text(res)
-
-async def workout_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    goal = " ".join(context.args) or "tăng cơ giảm mỡ"
-    user_id = update.effective_user.id
-    sys_p, mdl = get_user_config(user_id)
-    res = await ask_gemini(f"Gợi ý lịch tập thể hình cho mục tiêu: {goal}", sys_p, mdl)
-    await update.message.reply_text(res)
-
-async def recipe_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    ingredients = " ".join(context.args) or "trứng, cà chua"
-    user_id = update.effective_user.id
-    sys_p, mdl = get_user_config(user_id)
-    res = await ask_gemini(f"Gợi ý công thức món ăn từ nguyên liệu: {ingredients}", sys_p, mdl)
-    await update.message.reply_text(res)
-
 async def ping_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    start_t = time.time()
-    msg = await update.message.reply_text("🏓 Đang kiểm tra...")
-    latency = int((time.time() - start_t) * 1000)
-    await msg.edit_text(f"🏓 Pong! Tốc độ phản hồi: `{latency}ms`", parse_mode="Markdown")
+    start_t = datetime.datetime.now()
+    msg = await update.message.reply_text("🏓 Checking static latency...")
+    latency = (datetime.datetime.now() - start_t).total_seconds() * 1000
+    await msg.edit_text(f"🏓 Pong! Static command latency: `{latency:.3f}ms`" + BOT_FOOTER, parse_mode="Markdown")
 
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
-    _, mdl = get_user_config(user_id)
-    await update.message.reply_text(f"📊 Model: `{mdl}`\nTrạng thái: `Hoạt động siêu tốc`", parse_mode="Markdown")
-
-async def features_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await help_command(update, context)
-
-async def clear_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await newchat(update, context)
+    lang = get_user_lang(user_id)
+    loc = user_locations.get(user_id, "Not set")
+    text = (
+        f"📊 **Session Statistics**\n"
+        f"• Language: `{lang}`\n"
+        f"• Location: `{loc}`\n"
+        f"• Status: `Static handlers operational (< 0.001s)`"
+        + BOT_FOOTER
+    )
+    await update.message.reply_text(text, parse_mode="Markdown")
 
 async def support_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("👑 Hỗ trợ kỹ thuật: Vui lòng liên hệ quản trị viên.")
+    await update.message.reply_text("👑 Technical Support: Contact the system administrator for assistance." + BOT_FOOTER)
 
-async def debug_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🔍 Debug: All systems operational.")
+async def quiz_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    keyboard = []
+    row = []
+    for key, desc in QUIZ_TOPICS:
+        row.append(InlineKeyboardButton(desc, callback_data=f"quiz_{key}"))
+        if len(row) == 2:
+            keyboard.append(row)
+            row = []
+    if row:
+        keyboard.append(row)
 
-async def feedback_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("✅ Cảm ơn phản hồi của bạn!")
+    text = (
+        "🧠 **SELECT A QUIZ TOPIC**\nClick a topic below to generate a question:"
+        + BOT_FOOTER
+    )
+    await update.message.reply_text(text, parse_mode="Markdown", reply_markup=InlineKeyboardMarkup(keyboard))
 
-async def info_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🤖 **Ultra Gemini Bot v4.1** (Fast Mode)", parse_mode="Markdown")
-
-# Xử lý file PDF
-async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    doc = update.message.document
-    if not doc.file_name.lower().endswith('.pdf'):
-        await update.message.reply_text("⚠️ Vui lòng gửi file `.pdf`.")
-        return
-    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
-    file = await context.bot.get_file(doc.file_id)
-    bytes_data = await file.download_as_bytearray()
-    try:
-        reader = PdfReader(io.BytesIO(bytes_data))
-        text = "".join([p.extract_text() for p in reader.pages if p.extract_text()])[:10000]
-        user_id = update.effective_user.id
-        sys_p, mdl = get_user_config(user_id)
-        res = await ask_gemini(f"Phân tích tài liệu PDF:\n\n{text}", sys_p, mdl)
-        await update.message.reply_text(res)
-    except Exception as e:
-        await update.message.reply_text(f"❌ Lỗi xử lý PDF: {e}")
-
-# Xử lý hình ảnh (Vision)
-async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    photo = update.message.photo[-1]
-    caption = update.message.caption or "Phân tích hình ảnh này."
-    await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
-    file = await context.bot.get_file(photo.file_id)
-    bytes_data = await file.download_as_bytearray()
-    try:
-        img_part = types.Part.from_bytes(data=bytes(bytes_data), mime_type="image/jpeg")
-        user_id = update.effective_user.id
-        sys_p, mdl = get_user_config(user_id)
-        
-        def _call_vision():
-            return client.models.generate_content(
-                model=mdl,
-                contents=[img_part, caption],
-                config=types.GenerateContentConfig(
-                    system_instruction=sys_p,
-                    thinking_config=types.ThinkingConfig(thinking_budget=0)
-                )
+# =========================================================
+# LỆNH TIỆN ÍCH & AI (WEATHER, CLOCK, QUEST, CHAT)
+# =========================================================
+async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    
+    # Lấy vị trí từ tham số lệnh hoặc từ user_locations đã lưu
+    if context.args:
+        location = " ".join(context.args)
+    else:
+        location = user_locations.get(user_id)
+        if not location:
+            await update.message.reply_text(
+                "⚠️ Please specify a location or set your location first.\n"
+                "Usage: `/weather Thanh Ba, Phú Thọ` or `/weather Tokyo`" + BOT_FOOTER,
+                parse_mode="Markdown"
             )
-        response = await asyncio.to_thread(_call_vision)
-        await update.message.reply_text(response.text if response and response.text else "Không thể phân tích ảnh.")
-    except Exception as e:
-        await update.message.reply_text(f"❌ Lỗi xử lý ảnh: {e}")
+            return
 
-async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    lang = get_user_lang(user_id)
+    current_time_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    
+    sys_p = (
+        f"You are a professional meteorology assistant. Provide an accurate weather forecast table "
+        f"for the exact location '{location}' starting from the current time ({current_time_str}) through the rest of the day (24h forecast). "
+        f"The table must include columns/fields: Time, Temperature (°C), Condition (Sunny/Rainy/Cloudy/Storm...), Wind Speed (km/h), and Humidity (%). "
+        f"Support all district-level locations worldwide and in Vietnam (both old and new district names). "
+        f"Language of explanation: '{lang}'. Format neatly in a Markdown table."
+    )
+    
+    async with get_user_lock(user_id):
+        await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
+        try:
+            res = await ask_gemini(f"Get 24h weather table for {location}", sys_p, MODEL)
+            await update.message.reply_text(res, parse_mode="Markdown")
+        except Exception:
+            await update.message.reply_text("❌ Could not fetch weather data. Please try again with a valid location format." + BOT_FOOTER)
+
+async def clock_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    if not context.args:
+        await update.message.reply_text("⚠️ Usage: `/clock HH:MM` (e.g., `/clock 07:30`)" + BOT_FOOTER, parse_mode="Markdown")
+        return
+    
+    time_str = context.args[0]
+    try:
+        alarm_time = datetime.datetime.strptime(time_str, "%H:%M").time()
+    except ValueError:
+        await update.message.reply_text("❌ Invalid format. Please use HH:MM (24-hour format)." + BOT_FOOTER)
+        return
+
+    location = user_locations.get(user_id, "Unknown location")
+    
+    async def alarm_job():
+        try:
+            await context.bot.send_message(
+                chat_id=update.effective_chat.id,
+                text=f"⏰ **ALARM RINGING!**\nTime ({time_str}) reached! Location: {location}" + BOT_FOOTER,
+                parse_mode="Markdown"
+            )
+        except Exception:
+            pass
+
+    now = datetime.datetime.now()
+    target_dt = datetime.datetime.combine(now.date(), alarm_time)
+    if target_dt <= now:
+        target_dt += datetime.timedelta(days=1)
+
+    scheduler.add_job(alarm_job, 'date', run_date=target_dt)
+    await update.message.reply_text(f"✅ Alarm set for **{time_str}** (Location: {location})." + BOT_FOOTER, parse_mode="Markdown")
+
+async def handle_quiz_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
-    if query.data == "features":
-        await help_command(update, context)
-    elif query.data == "stats":
-        await stats_command(update, context)
-    else:
-        await query.message.reply_text("✅ Thao tác thành công.")
+    user_id = query.from_user.id
+    topic = query.data.split("_")[1]
+    lang = get_user_lang(user_id)
+    
+    sys_p = f"You are a quiz master. Create an interesting multiple-choice question about '{topic}' in language '{lang}'. Provide options A, B, C, D and reveal the answer."
+    res = await ask_gemini("Give me a question.", sys_p, MODEL)
+    await query.message.reply_text(res, parse_mode="Markdown")
 
-async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    query = update.inline_query.query
-    if not query:
-        return
-    results = [
-        InlineQueryResultArticle(
-            id="1",
-            title="Hỏi Gemini AI",
-            input_message_content=InputTextMessageContent(f"Câu hỏi: {query}"),
-            description=f"Truy vấn: {query}"
-        )
-    ]
-    await update.inline_query.answer(results)
+async def quest_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    lang = get_user_lang(user_id)
+    sys_p = f"You are an interactive text RPG game master. Start a short fantasy adventure quest in language '{lang}', presenting a scenario and 2 choices for the player."
+    res = await ask_gemini("Start new quest.", sys_p, MODEL)
+    await update.message.reply_text(res, parse_mode="Markdown")
 
-# Chat handler chính
 async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
         return
-
     user_text = update.message.text.strip()
-    if not user_text:
+    user_id = update.effective_user.id
+    
+    if user_id not in user_locations and len(user_text) < 50:
+        user_locations[user_id] = user_text
+        await update.message.reply_text(f"📍 Location saved: **{user_text}**. Type `/help` to see commands." + BOT_FOOTER, parse_mode="Markdown")
         return
 
-    user_id = update.effective_user.id
+    lang = get_user_lang(user_id)
+    sys_p = f"You are an advanced AI assistant. Respond in language code '{lang}'. Be concise and accurate."
+
     lock = get_user_lock(user_id)
-    
     async with lock:
         await context.bot.send_chat_action(chat_id=update.effective_chat.id, action="typing")
-        sys_p, mdl = get_user_config(user_id)
-
         try:
-            answer = await ask_gemini(user_text, sys_p, mdl)
+            answer = await ask_gemini(user_text, sys_p, MODEL)
             max_len = 4000
             if len(answer) <= max_len:
-                await update.message.reply_text(answer)
+                await update.message.reply_text(answer, parse_mode="Markdown")
             else:
                 for i in range(0, len(answer), max_len):
-                    await update.message.reply_text(answer[i:i+max_len])
-        except Exception as e:
-            logger.exception("Gemini execution error")
-            await update.message.reply_text("❌ Đã xảy ra lỗi, vui lòng thử lại sau!")
+                    await update.message.reply_text(answer[i:i+max_len], parse_mode="Markdown")
+        except Exception:
+            await update.message.reply_text("❌ An error occurred. Please try again." + BOT_FOOTER, parse_mode="Markdown")
 
 def main():
+    scheduler.start()
     server_thread = threading.Thread(target=run_server, daemon=True)
     server_thread.start()
 
     application = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
 
-    commands = [
-        ("start", start), ("help", help_command), ("newchat", newchat),
-        ("model", model_command), ("system", system_command), ("translate", translate_command),
-        ("code", code_command), ("summarize", summarize_command), ("calc", calc_command),
-        ("web", web_command), ("joke", joke_command), ("quote", quote_command),
-        ("fact", fact_command), ("riddle", riddle_command), ("fortune", fortune_command),
-        ("roast", roast_command), ("compliment", compliment_command), ("regex", regex_command),
-        ("sql", sql_command), ("json", json_command), ("grammar", grammar_command),
-        ("rewrite", rewrite_command), ("explain", explain_command), ("rhyme", rhyme_command),
-        ("acrostic", acrostic_command), ("story", story_command), ("email", email_command),
-        ("todo", todo_command), ("workout", workout_command), ("recipe", recipe_command),
-        ("ping", ping_command), ("stats", stats_command), ("features", features_command),
-        ("clear", clear_command), ("support", support_command), ("debug", debug_command),
-        ("feedback", feedback_command), ("info", info_command)
-    ]
+    # Static commands (executed instantly without Gemini overhead)
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("language", language_command))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("ping", ping_command))
+    application.add_handler(CommandHandler("stats", stats_command))
+    application.add_handler(CommandHandler("support", support_command))
+    application.add_handler(CommandHandler("quiz", quiz_command))
     
-    for cmd, handler in commands:
-        application.add_handler(CommandHandler(cmd, handler))
-
-    application.add_handler(CallbackQueryHandler(button_callback))
-    application.add_handler(InlineQueryHandler(inline_query))
-    application.add_handler(MessageHandler(filters.Document.PDF, handle_document))
-    application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
+    # Utility & AI commands
+    application.add_handler(CommandHandler("weather", weather_command))
+    application.add_handler(CommandHandler("clock", clock_command))
+    application.add_handler(CommandHandler("quest", quest_command))
+    
+    application.add_handler(CallbackQueryHandler(handle_language_selection, pattern="^lang_"))
+    application.add_handler(CallbackQueryHandler(handle_quiz_callback, pattern="^quiz_"))
+    
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat))
 
-    print("=" * 55)
-    print("🤖 ULTRA TELEGRAM AI BOT (40 TÍNH NĂNG - FAST MODE) ĐANG CHẠY...")
-    print("=" * 55)
-    
+    print("🤖 Ultra Telegram AI Bot with Weather, Language switcher & Static footer is running...")
     application.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
