@@ -247,7 +247,7 @@ async def fetch_webpage(url):
 # =========================================================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
-    asyncio.create_task(save_user_async(uid)) # Chạy ngầm, không chặn luồng chính
+    asyncio.create_task(save_user_async(uid)) 
     
     if uid not in user_languages:
         keyboard = [
@@ -528,41 +528,126 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await msg.edit_text(f"📄 <b>Tóm tắt PDF / PDF Summary:</b>\n{res}", parse_mode="HTML")
         except Exception:
             await msg.edit_text("❌ Lỗi đọc file PDF. / Error reading PDF.")
-Dưới đây là đoạn code mẫu (sử dụng thư viện `pyTelegramBotAPI` - telebot) đã được thêm lệnh `/myid` và cập nhật thông tin chủ bot **@itznvl** vào các lệnh `/start` và `/help` theo yêu cầu của bạn:
+            
+    asyncio.create_task(process_pdf()) 
 
-```python
-import telebot
+async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    await update.message.reply_text("🎙️ Bot đã nhận được tin nhắn thoại. / Voice received.")
 
-# Thay 'TOKEN_CUA_BAN' bằng token bot của bạn lấy từ BotFather
-TOKEN = 'TOKEN_CUA_BAN'
-bot = telebot.TeleBot(TOKEN)
+# =========================================================
+# XỬ LÝ CHAT CHÍNH VÀ INTERCEPT MENU
+# =========================================================
+async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    if not update.message or not update.message.text:
+        return
 
-@bot.message_handler(commands=['start'])
-def command_start(message):
-    text = (
-        "👋 Xin chào! Chào mừng bạn đã đến với bot.\n\n"
-        "👑 **Chủ bot:** @itznvl\n"
-        "Sử dụng lệnh /help để xem danh sách các tính năng."
-    )
-    bot.reply_to(message, text, parse_mode="Markdown")
+    uid = update.effective_user.id
+    text = update.message.text.strip()
+    lang = get_user_lang(uid)
+    m = TEXTS[lang]["menu"]
+    
+    if text == m["reset"]:
+        await cmd_reset(update, context); return
+    elif text == m["img"]:
+        await update.message.reply_text("💡 Gõ: `/img <nội dung ảnh>`", parse_mode="Markdown"); return
+    elif text == m["weather"]:
+        await update.message.reply_text("💡 Gõ: `/thoitiet <tên thành phố>`", parse_mode="Markdown"); return
+    elif text == m["math"]:
+        await update.message.reply_text("💡 Gõ: `/toan <đề bài toán>`", parse_mode="Markdown"); return
+    elif text == m["quiz"]:
+        await cmd_quiz(update, context); return
+    elif text == m["quote"]:
+        await cmd_quote(update, context); return
+    elif text == m["export"]:
+        await cmd_export(update, context); return
+    elif text == m["help"]:
+        await help_command(update, context); return
+    elif text == m["lang"]:
+        await cmd_language(update, context); return
 
-@bot.message_handler(commands=['help'])
-def command_help(message):
-    text = (
-        "🛠 **Danh sách các lệnh hỗ trợ:**\n"
-        "🔹 /start - Khởi động lại bot\n"
-        "🔹 /help - Xem menu hướng dẫn\n"
-        "🔹 /myid - Xem ID Telegram cá nhân của bạn\n\n"
-        "👑 **Cần hỗ trợ? Liên hệ chủ bot:** @itznvl"
-    )
-    bot.reply_to(message, text, parse_mode="Markdown")
+    if len(text) > MAX_MESSAGE_LENGTH:
+        await update.message.reply_text("⚠️ Tin nhắn quá dài. / Message too long.")
+        return
 
-@bot.message_handler(commands=['myid'])
-def command_myid(message):
-    user_id = message.from_user.id
-    # Trả về ID và dùng định dạng code block để người dùng dễ copy
-    bot.reply_to(message, f"🆔 ID Telegram của bạn là: `{user_id}`", parse_mode="Markdown")
+    asyncio.create_task(save_user_async(uid))
+    lock = get_user_lock(uid)
 
-if __name__ == '__main__':
-    print("Bot đang hoạt động...")
-    bot.infinity_polling()
+    async with lock:
+        await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
+        
+        urls = re.findall(r'https?://\S+', text)
+        if urls:
+            web_data = await fetch_webpage(urls[0])
+            if web_data:
+                text += f"\n\n--- Dữ liệu Web {urls[0]} ---\n{web_data}"
+
+        try:
+            history_context = "\n".join(user_chat_history.get(uid, [])[-4:])
+            full_prompt = f"Lịch sử:\n{history_context}\n\nNgười dùng nói: {text}" if history_context else text
+            
+            answer = await ask_gemini(full_prompt)
+            if not answer: raise RuntimeError("Rỗng")
+
+            if uid not in user_chat_history:
+                user_chat_history[uid] = []
+                
+            user_chat_history[uid].append(f"User: {update.message.text}")
+            user_chat_history[uid].append(f"Bot: {answer}")
+            
+            if len(user_chat_history[uid]) > 30:
+                user_chat_history[uid] = user_chat_history[uid][-30:]
+
+            for i in range(0, len(answer), 4000):
+                await update.message.reply_text(answer[i:i+4000])
+
+        except Exception as e:
+            logger.exception("Lỗi API Chat")
+            await update.message.reply_text("❌ Hệ thống đang bận, vui lòng thử lại sau. / System busy.")
+
+# =========================================================
+# MAIN KHỞI CHẠY
+# =========================================================
+def main():
+    threading.Thread(target=run_server, daemon=True).start()
+
+    app = Application.builder().token(TELEGRAM_BOT_TOKEN).build()
+
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(CommandHandler("help", help_command))
+    app.add_handler(CommandHandler("language", cmd_language))
+    app.add_handler(CommandHandler("myid", cmd_myid))
+    app.add_handler(CallbackQueryHandler(language_callback, pattern="^lang_"))
+    
+    app.add_handler(CommandHandler("reset", cmd_reset))
+    app.add_handler(CommandHandler("newchat", cmd_reset))
+    app.add_handler(CommandHandler("img", cmd_image))
+    app.add_handler(CommandHandler("tts", cmd_tts))
+    app.add_handler(CommandHandler("thoitiet", cmd_weather))
+    app.add_handler(CommandHandler("dich", cmd_translate))
+    app.add_handler(CommandHandler("crypto", cmd_crypto))
+    app.add_handler(CommandHandler("password", cmd_password))
+    app.add_handler(CommandHandler("ascii", cmd_ascii))
+    app.add_handler(CommandHandler("export", cmd_export))
+    app.add_handler(CommandHandler("stats", cmd_stats))
+    app.add_handler(CommandHandler("thongbao", cmd_thongbao))
+    app.add_handler(CommandHandler("code", cmd_code))
+    app.add_handler(CommandHandler("toan", cmd_math))
+    app.add_handler(CommandHandler("check", cmd_check))
+    app.add_handler(CommandHandler("nhac", cmd_reminder))
+    app.add_handler(CommandHandler("qr", cmd_qr))
+    app.add_handler(CommandHandler("quiz", cmd_quiz))
+    app.add_handler(CommandHandler("tiente", cmd_currency))
+    app.add_handler(CommandHandler("vui", cmd_quote))
+
+    app.add_handler(MessageHandler(filters.Document.ALL, handle_document))
+    app.add_handler(MessageHandler(filters.VOICE, handle_voice))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat))
+
+    print("=" * 60)
+    print("🚀 SIÊU TRỢ LÝ AI ĐÃ KHỞI ĐỘNG VỚI TỐC ĐỘ ÁNH SÁNG!")
+    print("=" * 60)
+
+    app.run_polling(drop_pending_updates=True)
+
+if __name__ == "__main__":
+    main()
