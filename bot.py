@@ -16,13 +16,14 @@ import google.generativeai as genai
 # =========================================================
 TOKEN = os.getenv('BOT_TOKEN')
 GEMINI_KEY = os.getenv('GEMINI_API_KEY')
+ADMIN_ID = os.getenv('ADMIN_ID')
 
 if not TOKEN:
     raise ValueError("⚠️ Chưa cấu hình biến môi trường BOT_TOKEN!")
 
 bot = telebot.TeleBot(TOKEN, threaded=True, num_threads=16)
 
-# Cấu hình itznvl AI Core với Gemini 2.0 Flash (Vừa nhanh vừa thông minh)
+# Cấu hình itznvl AI Core
 if GEMINI_KEY:
     genai.configure(api_key=GEMINI_KEY)
     ai_model = genai.GenerativeModel('gemini-2.0-flash')
@@ -67,6 +68,7 @@ LANG_DICT = {
             "/coin - Tung đồng xu\n"
             "/pin - Ghim tin nhắn\n"
             "/ban - Cấm thành viên\n"
+            "/thongbao <nội dung> - Gửi thông báo toàn hệ thống (Admin)\n"
             "/stats - Thống kê"
         ),
         'syntax_err': '⚠️ Sai cú pháp. Dùng đúng định dạng: ',
@@ -104,6 +106,7 @@ LANG_DICT = {
             "/coin - Flip coin\n"
             "/pin - Pin message\n"
             "/ban - Ban member\n"
+            "/thongbao <content> - Broadcast to all users (Admin)\n"
             "/stats - Stats"
         ),
         'syntax_err': '⚠️ Invalid syntax. Use: ',
@@ -141,6 +144,7 @@ LANG_DICT = {
             "/coin - Lempar koin\n"
             "/pin - Sematkan pesan\n"
             "/ban - Banned anggota\n"
+            "/thongbao <pesan> - Siaran massal (Admin)\n"
             "/stats - Statistik"
         ),
         'syntax_err': '⚠️ Sintaks tidak valid. Gunakan: ',
@@ -178,6 +182,7 @@ LANG_DICT = {
             "/coin - Lanzar moneda\n"
             "/pin - Fijar mensaje\n"
             "/ban - Banear miembro\n"
+            "/thongbao <mensaje> - Transmisión (Admin)\n"
             "/stats - Estadísticas"
         ),
         'syntax_err': '⚠️ Sintaxis incorrecta. Use: ',
@@ -215,6 +220,7 @@ LANG_DICT = {
             "/coin - Pile ou face\n"
             "/pin - Épingler message\n"
             "/ban - Bannir membre\n"
+            "/thongbao <message> - Diffusion (Admin)\n"
             "/stats - Statistiques"
         ),
         'syntax_err': '⚠️ Syntaxe incorrecte. Utilisez : ',
@@ -252,6 +258,7 @@ LANG_DICT = {
             "/coin - Münzwurf\n"
             "/pin - Nachricht anheften\n"
             "/ban - Mitglied sperren\n"
+            "/thongbao <nachricht> - Rundschreiben (Admin)\n"
             "/stats - Statistiken"
         ),
         'syntax_err': '⚠️ Ungültige Syntax. Verwendung: ',
@@ -289,6 +296,7 @@ LANG_DICT = {
             "/coin - Монетка\n"
             "/pin - Закрепить\n"
             "/ban - Забанить\n"
+            "/thongbao <текст> - Рассылка (Админ)\n"
             "/stats - Статистика"
         ),
         'syntax_err': '⚠️ Неверный синтаксис. Используйте: ',
@@ -326,6 +334,7 @@ LANG_DICT = {
             "/coin - Cara ou coroa\n"
             "/pin - Fixar mensagem\n"
             "/ban - Banir membro\n"
+            "/thongbao <mensagem> - Transmissão (Admin)\n"
             "/stats - Estatísticas"
         ),
         'syntax_err': '⚠️ Sintaxe inválida. Use: ',
@@ -350,7 +359,7 @@ LANG_DICT = {
             "/base64 <testo> - Base64\n"
             "/password - Password sicura\n"
             "/wiki <termine> - Wikipedia\n"
-            "/weather <provincia/distretto mondiale> - Meteo Globale\n"
+            "/weather <provincia/distrito mondiale> - Meteo Globale\n"
             "/ping - Latenza\n"
             "/id - ID utente\n\n"
             "📈 *3. FINANZA*\n"
@@ -363,6 +372,7 @@ LANG_DICT = {
             "/coin - Testata o croce\n"
             "/pin - Fissa messaggio\n"
             "/ban - Bannare membro\n"
+            "/thongbao <messaggio> - Broadcast (Admin)\n"
             "/stats - Statistiche"
         ),
         'syntax_err': '⚠️ Sintassi non valida. Usa: ',
@@ -400,6 +410,7 @@ LANG_DICT = {
             "/coin - 掷硬币\n"
             "/pin - 置顶消息\n"
             "/ban - 封禁成员\n"
+            "/thongbao <内容> - 全局广播 (Admin)\n"
             "/stats - 统计"
         ),
         'syntax_err': '⚠️ 语法错误。请使用：',
@@ -437,6 +448,7 @@ LANG_DICT = {
             "/coin - コイン投げ\n"
             "/pin - ピン留め\n"
             "/ban - メンバー追放\n"
+            "/thongbao <メッセージ> - 一斉送信 (Admin)\n"
             "/stats - 統計"
         ),
         'syntax_err': '⚠️ 構文エラーです。以下を使用してください：',
@@ -474,6 +486,7 @@ LANG_DICT = {
             "/coin - 동전 던지기\n"
             "/pin - 메시지 고정\n"
             "/ban - 멤버 차단\n"
+            "/thongbao <메시지> - 전체 공지 (Admin)\n"
             "/stats - 통계"
         ),
         'syntax_err': '⚠️ 구문 오류입니다. 다음을 사용하세요: ',
@@ -511,6 +524,7 @@ LANG_DICT = {
             "/coin - رمي العملة\n"
             "/pin - تثبيت رسالة\n"
             "/ban - حظر عضو\n"
+            "/thongbao <الرسالة> - إرسال إشعار للجميع (Admin)\n"
             "/stats - الإحصائيات"
         ),
         'syntax_err': '⚠️ صيغة غير صحيحة. استخدم: ',
@@ -548,6 +562,7 @@ LANG_DICT = {
             "/coin - सिक्का उछालें\n"
             "/pin - पिन मैसेज\n"
             "/ban - बैन मेंबर\n"
+            "/thongbao <संदेश> - सभी को सूचना दें (Admin)\n"
             "/stats - आंकड़े"
         ),
         'syntax_err': '⚠️ अमान्य सिंटैक्स। उपयोग करें: ',
@@ -585,6 +600,7 @@ LANG_DICT = {
             "/coin - ทอยเหรียญ\n"
             "/pin - ปักหมุด\n"
             "/ban - แบนสมาชิก\n"
+            "/thongbao <ข้อความ> - ส่งประกาศถึงผู้ใช้ทุกคน (Admin)\n"
             "/stats - สถิติ"
         ),
         'syntax_err': '⚠️ รูปแบบไม่ถูกต้อง ใช้: ',
@@ -622,6 +638,7 @@ LANG_DICT = {
             "/coin - Yazı tura\n"
             "/pin - Mesaj sabitle\n"
             "/ban - Üye engelle\n"
+            "/thongbao <mesaj> - Toplu duyuru (Admin)\n"
             "/stats - İstatistikler"
         ),
         'syntax_err': '⚠️ Geçersiz sözdizimi. Şunu kullanın: ',
@@ -753,7 +770,6 @@ def cmd_weather(message):
     if location:
         try:
             bot.send_chat_action(message.chat.id, 'typing')
-            # Sử dụng OpenStreetMap Nominatim API để hỗ trợ tìm kiếm toàn bộ tỉnh/thành, huyện/quận trên toàn thế giới (hỗ trợ cả tên cũ và mới qua lịch sử địa danh)
             geo_url = f"https://nominatim.openstreetmap.org/search?q={urllib.parse.quote(location)}&format=json&limit=1&accept-language=vi"
             headers = {'User-Agent': 'itznvl-bot/2.0'}
             geo_res = requests.get(geo_url, headers=headers, timeout=5).json()
@@ -762,14 +778,12 @@ def cmd_weather(message):
             if geo_res:
                 query_target = geo_res[0].get('display_name', location)
             
-            # Kết hợp wttr.in để lấy thời tiết toàn cầu chính xác theo tọa độ/tên định danh chuẩn
             weather_url = f"https://wttr.in/{urllib.parse.quote(query_target)}?format=3&lang=vi"
             res = requests.get(weather_url, headers=headers, timeout=5)
             
             if res.status_code == 200 and "Unknown location" not in res.text:
                 bot.reply_to(message, f"🌤 Thời tiết khu vực (`{location}`):\n`{res.text.strip()}`", parse_mode='Markdown')
             else:
-                # Fallback trực tiếp nếu không qua trung gian geocode
                 res_fallback = requests.get(f"https://wttr.in/{urllib.parse.quote(location)}?format=3", headers=headers, timeout=5)
                 if res_fallback.status_code == 200 and "Unknown location" not in res_fallback.text:
                     bot.reply_to(message, f"🌤 Thời tiết (`{location}`):\n`{res_fallback.text.strip()}`", parse_mode='Markdown')
@@ -854,6 +868,27 @@ def cmd_admin_actions(message):
     except:
         bot.reply_to(message, "❌ Admin rights missing.")
 
+@bot.message_handler(commands=['thongbao'])
+def cmd_thongbao(message):
+    if ADMIN_ID and str(message.from_user.id) != str(ADMIN_ID):
+        return bot.reply_to(message, "⚠️ Bạn không có quyền sử dụng lệnh này!")
+    
+    text = validate_args(message, 2, "/thongbao <nội dung thông báo>")
+    if not text:
+        return
+    
+    success_count = 0
+    fail_count = 0
+    
+    for chat_id in list(USER_DATA.keys()):
+        try:
+            bot.send_message(chat_id, f"📢 **THÔNG BÁO TỪ ADMIN:**\n\n{text}", parse_mode='Markdown')
+            success_count += 1
+        except Exception:
+            fail_count += 1
+            
+    bot.reply_to(message, f"✅ Đã gửi thông báo thành công tới `{success_count}` chats.\n❌ Thất bại: `{fail_count}` chats.", parse_mode='Markdown')
+
 # =========================================================
 # FALLBACK & AI CHAT HANDLER
 # =========================================================
@@ -876,5 +911,5 @@ def handler_fallback(message):
         bot.send_message(chat_id, get_msg(chat_id, 'help_prompt'))
 
 if __name__ == '__main__':
-    print("🚀 itznvl Bot with 16-Language Support & Global Weather Engine is running...")
+    print("🚀 itznvl Bot with Broadcast & Global Weather Engine is running...")
     bot.infinity_polling(timeout=20, long_polling_timeout=15)
