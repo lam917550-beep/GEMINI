@@ -9,7 +9,7 @@ from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 from google import genai
 from PIL import Image,ImageDraw,ImageFont
-from telegram import Update,InlineKeyboardButton,InlineKeyboardMarkup,ReplyKeyboardMarkup,KeyboardButton,ReplyKeyboardRemove,FSInputFile
+from telegram import Update,InlineKeyboardButton,InlineKeyboardMarkup,ReplyKeyboardMarkup,KeyboardButton,ReplyKeyboardRemove
 from telegram.ext import Application,CommandHandler,MessageHandler,CallbackQueryHandler,ContextTypes,filters
 
 load_dotenv()
@@ -160,12 +160,29 @@ for _n,_l in STICKERS.items(): make_sticker(_n,_l)
 
 async def send_sticker(update,name):
     try:
-        if name in sticker_cache:
-            await update.effective_message.reply_sticker(sticker=sticker_cache[name]); return
-        m=await update.effective_message.reply_sticker(sticker=FSInputFile(make_sticker(name,STICKERS.get(name,'AI'))))
-        if m and m.sticker: sticker_cache[name]=m.sticker.file_id
-    except Exception: log.exception('sticker')
+        msg=update.effective_message
 
+        if name in sticker_cache:
+            await msg.reply_sticker(
+                sticker=sticker_cache[name]
+            )
+            return
+
+        path=make_sticker(
+            name,
+            STICKERS.get(name,"AI")
+        )
+
+        with open(path,"rb") as f:
+            sent=await msg.reply_sticker(
+                sticker=f
+            )
+
+        if sent and sent.sticker:
+            sticker_cache[name]=sent.sticker.file_id
+
+    except Exception:
+        log.exception("sticker error")
 # =========================================================
 # WEATHER
 # =========================================================
