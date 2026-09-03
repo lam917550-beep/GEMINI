@@ -1,6 +1,7 @@
-pyTelegramBotAPI
-Flask
-requests
-qrcode[pil]
-google-generativeai
-gunicorn
+pyTelegramBotAPI>=4.29,<5
+Flask>=3.1,<4
+requests>=2.32,<3
+qrcode[pil]>=8,<9
+google-genai>=2,<3
+gunicorn>=23,<24
+```
