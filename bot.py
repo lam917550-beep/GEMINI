@@ -13,7 +13,7 @@ from telegram.ext import (
 )
 from pypdf import PdfReader
 from bs4 import BeautifulSoup
-from gTTS import gTTS
+from gtts import gTTS  # Đã sửa lỗi chữ thường/chữ hoa (gtts thay vì gTTS)
 
 # ==========================================
 # DANH SÁCH 25+ TÍNH NĂNG TÍCH HỢP TRONG BOT:
@@ -54,7 +54,6 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 client = genai.Client(api_key=GEMINI_API_KEY)
 app = Flask(__name__)
 
-# Lưu trữ cấu hình và session riêng cho từng user
 user_sessions = {}
 user_models = {}
 user_system_prompts = {}
@@ -84,7 +83,6 @@ def call_gemini(user_id, prompt_parts):
     history.append({"role": "user", "parts": prompt_parts})
     
     models_to_try = [current_model, "gemini-2.5-flash", "gemini-2.0-flash", "gemini-1.5-flash"]
-    # Loại bỏ trùng lặp giữ nguyên thứ tự
     models_to_try = list(dict.fromkeys(models_to_try))
     
     for model in models_to_try:
@@ -111,7 +109,7 @@ def call_gemini(user_id, prompt_parts):
                 
     return "⚠️ Hệ thống Google AI đang quá tải tạm thời hoặc model không khả dụng. Vui lòng thử lại sau ít phút!"
 
-# --- CÁC COMMAND HANDLERS (Tính năng 1-16) ---
+# --- CÁC COMMAND HANDLERS ---
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = (
@@ -121,8 +119,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "🔧 **Lệnh hệ thống chính:**\n"
         "• `/help` - Xem hướng dẫn đầy đủ\n"
         "• `/clear` - Xóa lịch sử trò chuyện\n"
-        "• `/model [tên]` - Đổi model (vd: `gemini-2.5-flash`)\n"
-        "• `/system [nội_dung]` - Thay đổi nhân cách/hướng dẫn cho AI\n"
+        "• `/model [tên]` - Đổi model\n"
+        "• `/system [nội_dung]` - Thay đổi nhân cách AI\n"
         "• `/tts [văn_bản]` - Chuyển văn bản thành giọng nói\n"
         "• `/web [url]` - Tóm tắt nội dung website\n"
         "• `/translate [ngôn_ngữ] [text]` - Dịch thuật\n"
@@ -149,7 +147,7 @@ async def model_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if not context.args:
         _, current_m, _ = get_user_config(user_id)
-        await update.message.reply_text(f"ℹ️ Model hiện tại của bạn: `{current_m}`\nDùng lệnh: `/model <tên_model>` để đổi.", parse_mode="Markdown")
+        await update.message.reply_text(f"ℹ️ Model hiện tại: `{current_m}`\nDùng lệnh: `/model <tên_model>` để đổi.", parse_mode="Markdown")
         return
     new_model = context.args[0]
     user_models[user_id] = new_model
@@ -163,8 +161,8 @@ async def system_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     new_sys = " ".join(context.args)
     user_system_prompts[user_id] = new_sys
-    user_sessions[user_id] = [] # Reset lịch sử khi đổi persona
-    await update.message.reply_text("✅ Đã cập nhật nhân cách AI và làm mới ngữ cảnh thành công!")
+    user_sessions[user_id] = []
+    await update.message.reply_text("✅ Đã cập nhật nhân cách AI và làm mới ngữ cảnh!")
 
 async def tts_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = " ".join(context.args)
@@ -252,7 +250,6 @@ async def calc_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     expr = "".join(context.args)
     try:
-        # Tính toán an toàn với eval giới hạn toán học cơ bản
         allowed = set("0123456789+-*/(). ")
         if not all(c in allowed for c in expr):
             raise ValueError("Ký tự không hợp lệ")
@@ -268,7 +265,7 @@ async def feedback_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     await update.message.reply_text("✅ Cảm ơn bạn đã gửi phản hồi! Chúng tôi đã ghi nhận đóng góp của bạn.")
 
-# --- MEDIA & MESSAGE HANDLERS (Tính năng 17-23) ---
+# --- MEDIA & MESSAGE HANDLERS ---
 
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     doc = update.message.document
@@ -303,7 +300,7 @@ async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text("🎙️ Đã nhận được tin nhắn thoại của bạn. Bạn hãy gõ nội dung trực tiếp để bot hỗ trợ tốt nhất nhé!")
 
 async def handle_sticker(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_sticker("CAACAgIAAxkBAAE...") # Phản hồi hoặc bỏ qua tùy ý
+    pass
 
 async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.inline_query.query
@@ -327,7 +324,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply = call_gemini(update.effective_user.id, [text])
     await update.message.reply_text(reply)
 
-# --- KHỞI CHẠY HỆ THỐNG (Tính năng 24-26) ---
+# --- KHỞI CHẠY HỆ THỐNG ---
 
 def main():
     if not TELEGRAM_TOKEN or not GEMINI_API_KEY:
@@ -342,7 +339,6 @@ def main():
 
     application = Application.builder().token(TELEGRAM_TOKEN).build()
     
-    # Đăng ký toàn bộ Command Handlers
     cmds = [
         ("start", start), ("help", help_command), ("clear", clear_command),
         ("model", model_command), ("system", system_command), ("tts", tts_command),
@@ -354,7 +350,6 @@ def main():
     for name, handler in cmds:
         application.add_handler(CommandHandler(name, handler))
     
-    # Đăng ký Media & Message Handlers
     application.add_handler(MessageHandler(filters.Document.ALL, handle_document))
     application.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     application.add_handler(MessageHandler(filters.VOICE, handle_voice))
