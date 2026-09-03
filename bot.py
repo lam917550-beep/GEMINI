@@ -56,14 +56,14 @@ if not TELEGRAM_BOT_TOKEN or not GEMINI_API_KEY:
     raise RuntimeError("Thiếu TELEGRAM_BOT_TOKEN hoặc GEMINI_API_KEY trong file .env")
 
 # =========================================================
-# FLASK WEB SERVER CHO RENDER (GIỮ ALIVE)
+# FLASK WEB SERVER CHO RENDER
 # =========================================================
 app = Flask(__name__)
 
 @app.route('/')
 def home():
     uptime = round((time.time() - START_TIME) / 3600, 2)
-    return f"Ultra AI Bot with Multi-language is running at Light Speed! Uptime: {uptime} hours."
+    return f"Ultra AI Bot is running! Uptime: {uptime} hours."
 
 def run_server():
     port = int(os.environ.get("PORT", 8080))
@@ -79,13 +79,13 @@ logger = logging.getLogger(__name__)
 client = genai.Client(api_key=GEMINI_API_KEY)
 
 SYSTEM_PROMPT = (
-    "Bạn là Siêu Trợ Lý AI đa năng tối thượng trên Telegram. "
+    "Bạn là Siêu Trợ Lý AI đa năng trên Telegram. "
     "Nhiệm vụ: Phản hồi cực kỳ nhanh, chính xác, lập luận logic sâu sắc, "
-    "cung cấp code hoàn chỉnh khi được yêu cầu, thân thiện, và định dạng Markdown rõ ràng."
+    "cung cấp code hoàn chỉnh khi được yêu cầu, thân thiện."
 )
 
 # =========================================================
-# QUẢN LÝ DỮ LIỆU TỐC ĐỘ CAO TRONG RAM (KHÔNG BLOCKING)
+# QUẢN LÝ DỮ LIỆU TRONG RAM
 # =========================================================
 USERS_FILE = "users.txt"
 known_users = set()
@@ -115,17 +115,16 @@ def _save_user_sync(user_id):
             logger.error(f"Lỗi lưu user: {e}")
 
 async def save_user_async(user_id):
-    """Chạy ghi file ở luồng phụ để không bị lag bot"""
     await asyncio.to_thread(_save_user_sync, user_id)
 
 load_users()
 
 # =========================================================
-# TỪ ĐIỂN VĂN BẢN (ĐÃ SỬA LỖI HTML TAG TRONG HELP)
+# TỪ ĐIỂN VĂN BẢN HỆ THỐNG
 # =========================================================
 TEXTS = {
     "vi": {
-        "welcome": "🤖 <b>CHÀO MỪNG ĐẾN VỚI SIÊU TRỢ LÝ AI</b>\n\nBạn đã chọn ngôn ngữ: <b>Tiếng Việt 🇻🇳</b>\nHệ thống tích hợp hơn 25+ tính năng thông minh tối thượng.\n\n👑 <b>Chủ bot:</b> @itznvl\n\nGõ /help để xem danh sách lệnh hoặc sử dụng menu bên dưới.",
+        "welcome": "🤖 <b>CHÀO MỪNG ĐẾN VỚI SIÊU TRỢ LÝ AI</b>\n\nBạn đã chọn ngôn ngữ: <b>Tiếng Việt 🇻🇳</b>\nHệ thống tích hợp hơn 25+ tính năng thông minh.\n\n👑 <b>Chủ bot:</b> @itznvl\n\nGõ /help để xem danh sách lệnh hoặc sử dụng menu bên dưới.",
         "lang_changed": "✅ Đã chuyển ngôn ngữ thành công sang <b>Tiếng Việt 🇻🇳</b>!",
         "choose_lang": "🌍 <b>Vui lòng chọn ngôn ngữ của bạn / Please select your language:</b>",
         "help": (
@@ -140,7 +139,7 @@ TEXTS = {
             "• `/code [yêu cầu]` - Lập trình & Debug mã nguồn\n"
             "• `/toan [bài toán]` - Giải toán chi tiết từng bước\n"
             "• `/crypto [coin]` - Tra cứu giá tiền mã hóa (BTC, ETH...)\n"
-            "• `/password [độ dài]` - Tạo mật khẩu siêu bảo mật ngẫu nhiên\n"
+            "• `/password [độ dài]` - Tạo mật khẩu siêu bảo mật\n"
             "• `/ascii [chữ]` - Biến văn bản thành nghệ thuật chữ ASCII\n"
             "• `/check [câu]` - Sửa lỗi ngữ pháp\n"
             "• `/nhac [giây] [nội dung]` - Đặt lịch hẹn nhắc nhở\n"
@@ -149,8 +148,8 @@ TEXTS = {
             "• `/tiente [số] [từ] sang [đến]` - Đổi ngoại tệ\n"
             "• `/vui` - Câu nói hay / Truyện cười thư giãn\n"
             "• `/export` - Xuất file lịch sử chat (.txt)\n"
-            "• `/reset` - Làm mới bộ nhớ đệm ngữ cảnh (Reset AI)\n\n"
-            "💡 <b>Mẹo:</b> <i>Bạn có thể gửi một tệp tin PDF trực tiếp vào khung chat để bot tự động đọc và tóm tắt!</i>"
+            "• `/reset` - Làm mới bộ nhớ đệm ngữ cảnh\n\n"
+            "💡 <b>Mẹo:</b> <i>Bạn có thể gửi một tệp PDF trực tiếp vào khung chat để bot đọc và tóm tắt!</i>"
         ),
         "menu": {
             "reset": "🧹 Xóa trí nhớ",
@@ -205,6 +204,7 @@ TEXTS = {
         }
     }
 }
+
 def get_user_lang(uid):
     return user_languages.get(uid, "vi")
 
@@ -219,7 +219,7 @@ def get_markup(uid):
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, is_persistent=True)
 
 # =========================================================
-# CORE GEMINI & ASYNC WEB SCRAPER
+# CORE GEMINI & SCRAPER
 # =========================================================
 async def ask_gemini(prompt_text):
     def _call():
@@ -242,7 +242,7 @@ async def fetch_webpage(url):
         return None
 
 # =========================================================
-# LỆNH TĨNH: PHẢN HỒI TỨC THÌ (RAM-BASED)
+# LỆNH HỆ THỐNG TĨNH
 # =========================================================
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
@@ -316,24 +316,24 @@ async def cmd_myid(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(msg, parse_mode="HTML")
 
 # =========================================================
-# CÁC TÍNH NĂNG XỬ LÝ (SỬ DỤNG AI / API)
+# TÍNH NĂNG AI / API (AN TOÀN KHÔNG DÙNG HTML PARSER)
 # =========================================================
 async def cmd_image(update: Update, context: ContextTypes.DEFAULT_TYPE):
     prompt = " ".join(context.args)
     if not prompt:
-        await update.message.reply_text("⚠️ Hướng dẫn / Usage: `/img <prompt>`", parse_mode="Markdown")
+        await update.message.reply_text("⚠️ Hướng dẫn / Usage: /img [mô tả]")
         return
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.UPLOAD_PHOTO)
     url = f"https://image.pollinations.ai/prompt/{urllib.parse.quote(prompt)}?width=1024&height=1024&nologo=true"
     try:
-        await update.message.reply_photo(photo=url, caption=f"🎨 <b>AI Art:</b> {prompt}", parse_mode="HTML")
+        await update.message.reply_photo(photo=url, caption=f"🎨 AI Art: {prompt}")
     except Exception:
         await update.message.reply_text("❌ Lỗi tải ảnh. / Cannot generate image.")
 
 async def cmd_tts(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = " ".join(context.args)
     if not text:
-        await update.message.reply_text("⚠️ Hướng dẫn / Usage: `/tts <text>`", parse_mode="Markdown")
+        await update.message.reply_text("⚠️ Hướng dẫn / Usage: /tts [văn bản]")
         return
     uid = update.effective_user.id
     lang_code = 'en' if get_user_lang(uid) == 'en' else 'vi'
@@ -345,12 +345,12 @@ async def cmd_tts(update: Update, context: ContextTypes.DEFAULT_TYPE):
         bio.seek(0)
         await update.message.reply_voice(voice=bio)
     except Exception:
-        await update.message.reply_text("❌ Lỗi tạo giọng nói. / Voice generation error.")
+        await update.message.reply_text("❌ Lỗi tạo giọng nói.")
 
 async def cmd_weather(update: Update, context: ContextTypes.DEFAULT_TYPE):
     loc = " ".join(context.args)
     if not loc:
-        await update.message.reply_text("⚠️ Hướng dẫn / Usage: `/thoitiet <city>`", parse_mode="Markdown")
+        await update.message.reply_text("⚠️ Hướng dẫn / Usage: /thoitiet [thành phố]")
         return
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
     try:
@@ -358,26 +358,26 @@ async def cmd_weather(update: Update, context: ContextTypes.DEFAULT_TYPE):
         async with aiohttp.ClientSession() as session:
             async with session.get(url, timeout=3) as res:
                 text = await res.text()
-                await update.message.reply_text(f"🌤️ <b>Thời tiết / Weather:</b>\n{text}", parse_mode="HTML")
+                await update.message.reply_text(f"🌤️ Thời tiết / Weather:\n{text}")
     except Exception:
-        await update.message.reply_text("❌ Lỗi API Thời tiết. / Weather unavailable.")
+        await update.message.reply_text("❌ Lỗi API Thời tiết.")
 
 async def cmd_translate(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = " ".join(context.args)
     if not text:
-        await update.message.reply_text("⚠️ Hướng dẫn / Usage: `/dich <text>`", parse_mode="Markdown")
+        await update.message.reply_text("⚠️ Hướng dẫn / Usage: /dich [văn bản]")
         return
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
     uid = update.effective_user.id
     target = "English" if get_user_lang(uid) == "en" else "tiếng Việt"
     res = await ask_gemini(f"Dịch đoạn sau sang {target}, chỉ trả kết quả, không giải thích: {text}")
-    await update.message.reply_text(f"🌐 <b>Bản dịch / Translation:</b>\n{res}", parse_mode="HTML")
+    await update.message.reply_text(f"🌐 Bản dịch / Translation:\n{res}")
 
 async def cmd_crypto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     coin = " ".join(context.args).lower() or "bitcoin"
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
     res = await ask_gemini(f"Cung cấp thông tin giá hiện tại và xu hướng ngắn gọn của đồng tiền mã hóa '{coin}'.")
-    await update.message.reply_text(f"🪙 <b>Crypto Info:</b>\n{res}", parse_mode="HTML")
+    await update.message.reply_text(f"🪙 Crypto Info:\n{res}")
 
 async def cmd_password(update: Update, context: ContextTypes.DEFAULT_TYPE):
     length = 12
@@ -386,12 +386,12 @@ async def cmd_password(update: Update, context: ContextTypes.DEFAULT_TYPE):
         length = max(6, min(length, 64))
     chars = string.ascii_letters + string.digits + "!@#$%^&*"
     pwd = "".join(random.choice(chars) for _ in range(length))
-    await update.message.reply_text(f"🔑 <b>Mật khẩu bảo mật / Secure Password:</b>\n`{pwd}`", parse_mode="Markdown")
+    await update.message.reply_text(f"🔑 Mật khẩu bảo mật:\n`{pwd}`", parse_mode="Markdown")
 
 async def cmd_ascii(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = " ".join(context.args)
     if not text:
-        await update.message.reply_text("⚠️ Hướng dẫn / Usage: `/ascii <text>`", parse_mode="Markdown")
+        await update.message.reply_text("⚠️ Hướng dẫn / Usage: /ascii [chữ]")
         return
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
     res = await ask_gemini(f"Tạo nghệ thuật chữ ASCII art đẹp và ngắn gọn cho từ khóa: {text}")
@@ -401,12 +401,12 @@ async def cmd_export(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     history = user_chat_history.get(uid, [])
     if not history:
-        await update.message.reply_text("📭 Chưa có lịch sử trò chuyện. / No chat history.")
+        await update.message.reply_text("📭 Chưa có lịch sử trò chuyện.")
         return
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.UPLOAD_DOCUMENT)
     bio = io.BytesIO("\n".join(history).encode('utf-8'))
     bio.name = "chat_history.txt"
-    await update.message.reply_document(document=bio, caption="💾 Lịch sử chat của bạn / Chat History.")
+    await update.message.reply_document(document=bio, caption="💾 Lịch sử chat của bạn.")
 
 async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not ADMIN_ID or update.effective_user.id != ADMIN_ID:
@@ -415,8 +415,8 @@ async def cmd_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uptime = int(time.time() - START_TIME)
     h, rem = divmod(uptime, 3600)
     m, s = divmod(rem, 60)
-    text = f"📊 <b>THỐNG KÊ HỆ THỐNG</b>\n⏳ Uptime: {h}h {m}m {s}s\n👥 User: {len(known_users)}\n🧠 Model: {MODEL}"
-    await update.message.reply_text(text, parse_mode="HTML")
+    text = f"📊 THỐNG KÊ HỆ THỐNG\n⏳ Uptime: {h}h {m}m {s}s\n👥 User: {len(known_users)}\n🧠 Model: {MODEL}"
+    await update.message.reply_text(text)
 
 async def cmd_thongbao(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not ADMIN_ID or update.effective_user.id != ADMIN_ID:
@@ -424,13 +424,13 @@ async def cmd_thongbao(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
     parts = update.message.text.split(" ", 1)
     if len(parts) < 2 or not parts[1].strip():
-        await update.message.reply_text("⚠️ Hướng dẫn: `/thongbao <nội dung>`", parse_mode="Markdown")
+        await update.message.reply_text("⚠️ Hướng dẫn: /thongbao [nội dung]")
         return
     msg = await update.message.reply_text(f"🚀 Đang gửi thông báo đến {len(known_users)} người...")
     success, fail = 0, 0
     for uid in list(known_users):
         try:
-            await context.bot.send_message(chat_id=uid, text=f"📢 <b>Thông báo từ Admin:</b>\n\n{parts[1].strip()}", parse_mode="HTML")
+            await context.bot.send_message(chat_id=uid, text=f"📢 Thông báo từ Admin:\n\n{parts[1].strip()}")
             success += 1
             await asyncio.sleep(0.05)
         except:
@@ -440,7 +440,7 @@ async def cmd_thongbao(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cmd_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
     code_query = " ".join(context.args)
     if not code_query:
-        await update.message.reply_text("⚠️ Hướng dẫn / Usage: `/code <request>`", parse_mode="Markdown")
+        await update.message.reply_text("⚠️ Hướng dẫn / Usage: /code [yêu cầu]")
         return
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
     res = await ask_gemini(f"Viết code hoàn chỉnh, tối ưu và giải thích ngắn gọn cho: {code_query}")
@@ -449,63 +449,63 @@ async def cmd_code(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def cmd_math(update: Update, context: ContextTypes.DEFAULT_TYPE):
     math_q = " ".join(context.args)
     if not math_q:
-        await update.message.reply_text("⚠️ Hướng dẫn / Usage: `/toan <problem>`", parse_mode="Markdown")
+        await update.message.reply_text("⚠️ Hướng dẫn / Usage: /toan [bài toán]")
         return
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
     res = await ask_gemini(f"Giải chi tiết bài toán sau: {math_q}")
-    await update.message.reply_text(f"🧮 <b>Giải toán / Math Solver:</b>\n{res}", parse_mode="HTML")
+    await update.message.reply_text(f"🧮 Giải toán / Math Solver:\n{res}")
 
 async def cmd_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = " ".join(context.args)
     if not text:
-        await update.message.reply_text("⚠️ Hướng dẫn / Usage: `/check <sentence>`", parse_mode="Markdown")
+        await update.message.reply_text("⚠️ Hướng dẫn / Usage: /check [câu]")
         return
     res = await ask_gemini(f"Sửa lỗi ngữ pháp và viết lại câu chuẩn xác hơn: {text}")
     await update.message.reply_text(res)
 
 async def cmd_reminder(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not context.args or len(context.args) < 2:
-        await update.message.reply_text("⚠️ Hướng dẫn / Usage: `/nhac <seconds> <message>`", parse_mode="Markdown")
+        await update.message.reply_text("⚠️ Hướng dẫn / Usage: /nhac [giây] [nội dung]")
         return
     try:
         delay = int(context.args[0])
         msg = " ".join(context.args[1:])
-        await update.message.reply_text(f"⏰ Đã đặt lịch nhắc sau {delay} giây! / Reminder set!")
+        await update.message.reply_text(f"⏰ Đã đặt lịch nhắc sau {delay} giây!")
         
         async def send_remind():
             await asyncio.sleep(delay)
-            await update.message.reply_text(f"⏰ <b>NHẮC NHỞ / REMINDER:</b>\n{msg}", parse_mode="HTML")
+            await update.message.reply_text(f"⏰ NHẮC NHỞ:\n{msg}")
         
         asyncio.create_task(send_remind())
     except ValueError:
-        await update.message.reply_text("❌ Số giây không hợp lệ. / Invalid seconds.")
+        await update.message.reply_text("❌ Số giây không hợp lệ.")
 
 async def cmd_qr(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = " ".join(context.args)
     if not text:
-        await update.message.reply_text("⚠️ Hướng dẫn / Usage: `/qr <text>`", parse_mode="Markdown")
+        await update.message.reply_text("⚠️ Hướng dẫn / Usage: /qr [text]")
         return
     qr_url = f"https://api.qrserver.com/v1/create-qr-code/?size=300x300&data={urllib.parse.quote(text)}"
-    await update.message.reply_photo(photo=qr_url, caption=f"🔲 <b>Mã QR:</b> {text}", parse_mode="HTML")
+    await update.message.reply_photo(photo=qr_url, caption=f"🔲 Mã QR: {text}")
 
 async def cmd_quiz(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
     res = await ask_gemini("Tạo 1 câu hỏi trắc nghiệm kiến thức vui ngắn gọn kèm 4 đáp án A, B, C, D và đáp án đúng ở cuối.")
-    await update.message.reply_text(f"🎮 <b>ĐỐ VUI / TRIVIA QUIZ</b>\n\n{res}", parse_mode="HTML")
+    await update.message.reply_text(f"🎮 ĐỐ VUI / TRIVIA QUIZ\n\n{res}")
 
 async def cmd_currency(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = " ".join(context.args)
     if not query:
-        await update.message.reply_text("⚠️ Hướng dẫn / Usage: `/tiente 100 USD sang VND`", parse_mode="Markdown")
+        await update.message.reply_text("⚠️ Hướng dẫn / Usage: /tiente [số] [từ] sang [đến]")
         return
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
     res = await ask_gemini(f"Quy đổi tiền tệ chính xác cho: {query}")
-    await update.message.reply_text(f"💱 <b>Quy đổi tiền tệ / Currency:</b>\n{res}", parse_mode="HTML")
+    await update.message.reply_text(f"💱 Quy đổi tiền tệ:\n{res}")
 
 async def cmd_quote(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await context.bot.send_chat_action(chat_id=update.effective_chat.id, action=ChatAction.TYPING)
-    res = await ask_gemini("Cho một câu nói truyền cảm hứng hoặc truyện cười ngắn gọn.")
-    await update.message.reply_text(res)
+    res = await ask_gemini("Cho một câu nói truyền cảm hứng hoặc truyện cười ngắn gọn thư giãn.")
+    await update.message.reply_text(f"💡 Danh ngôn / Truyện cười:\n{res}")
 
 # =========================================================
 # XỬ LÝ ĐỌC FILE PDF & VOICE
@@ -513,9 +513,9 @@ async def cmd_quote(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
     doc = update.message.document
     if not doc.file_name.endswith('.pdf'):
-        await update.message.reply_text("⚠️ Bot chỉ hỗ trợ file PDF. / PDF only.")
+        await update.message.reply_text("⚠️ Bot chỉ hỗ trợ file PDF.")
         return
-    msg = await update.message.reply_text("⏳ Đang tải và đọc tài liệu PDF... / Reading PDF...")
+    msg = await update.message.reply_text("⏳ Đang tải và đọc tài liệu PDF...")
     
     async def process_pdf():
         try:
@@ -524,17 +524,17 @@ async def handle_document(update: Update, context: ContextTypes.DEFAULT_TYPE):
             reader = PdfReader(file_bytes)
             text = "".join([page.extract_text() for page in reader.pages])[:8000]
             res = await ask_gemini(f"Tóm tắt các điểm chính từ tài liệu sau:\n{text}")
-            await msg.edit_text(f"📄 <b>Tóm tắt PDF / PDF Summary:</b>\n{res}", parse_mode="HTML")
+            await msg.edit_text(f"📄 Tóm tắt PDF:\n{res}")
         except Exception:
-            await msg.edit_text("❌ Lỗi đọc file PDF. / Error reading PDF.")
+            await msg.edit_text("❌ Lỗi đọc file PDF.")
             
     asyncio.create_task(process_pdf()) 
 
 async def handle_voice(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🎙️ Bot đã nhận được tin nhắn thoại. / Voice received.")
+    await update.message.reply_text("🎙️ Bot đã nhận được tin nhắn thoại.")
 
 # =========================================================
-# XỬ LÝ CHAT CHÍNH VÀ INTERCEPT MENU
+# XỬ LÝ CHAT CHÍNH VÀ MENU
 # =========================================================
 async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not update.message or not update.message.text:
@@ -548,11 +548,11 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if text == m["reset"]:
         await cmd_reset(update, context); return
     elif text == m["img"]:
-        await update.message.reply_text("💡 Gõ: `/img <nội dung ảnh>`", parse_mode="Markdown"); return
+        await update.message.reply_text("💡 Gõ: /img [nội dung ảnh]"); return
     elif text == m["weather"]:
-        await update.message.reply_text("💡 Gõ: `/thoitiet <tên thành phố>`", parse_mode="Markdown"); return
+        await update.message.reply_text("💡 Gõ: /thoitiet [tên thành phố]"); return
     elif text == m["math"]:
-        await update.message.reply_text("💡 Gõ: `/toan <đề bài toán>`", parse_mode="Markdown"); return
+        await update.message.reply_text("💡 Gõ: /toan [đề bài toán]"); return
     elif text == m["quiz"]:
         await cmd_quiz(update, context); return
     elif text == m["quote"]:
@@ -565,7 +565,7 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await cmd_language(update, context); return
 
     if len(text) > MAX_MESSAGE_LENGTH:
-        await update.message.reply_text("⚠️ Tin nhắn quá dài. / Message too long.")
+        await update.message.reply_text("⚠️ Tin nhắn quá dài.")
         return
 
     asyncio.create_task(save_user_async(uid))
@@ -600,8 +600,8 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text(answer[i:i+4000])
 
         except Exception as e:
-            logger.exception("Lỗi API Chat")
-            await update.message.reply_text("❌ Hệ thống đang bận, vui lòng thử lại sau. / System busy.")
+            logger.exception("Lỗi API Chat thực tế:")
+            await update.message.reply_text(f"❌ Lỗi xử lý: {str(e)[:100]}")
 
 # =========================================================
 # MAIN KHỞI CHẠY
@@ -643,7 +643,7 @@ def main():
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat))
 
     print("=" * 60)
-    print("🚀 SIÊU TRỢ LÝ AI ĐÃ KHỞI ĐỘNG VỚI TỐC ĐỘ ÁNH SÁNG!")
+    print("🚀 SIÊU TRỢ LÝ AI ĐÃ KHỞI ĐỘNG HOÀN HẢO KHÔNG LỖI!")
     print("=" * 60)
 
     app.run_polling(drop_pending_updates=True)
