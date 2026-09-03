@@ -1,8 +1,6 @@
-google-genai
-python-telegram-bot
-flask
-python-dotenv
-pypdf
-beautifulsoup4
+pyTelegramBotAPI
+Flask
 requests
-apscheduler
+qrcode[pil]
+google-generativeai
+gunicorn
