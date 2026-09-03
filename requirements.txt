@@ -4,4 +4,5 @@ google-genai
 flask
 aiohttp
 beautifulsoup4
-gTTS
+gtts
+pypdf
