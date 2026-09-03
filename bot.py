@@ -49,7 +49,7 @@ if ADMIN_ID:
     except ValueError:
         ADMIN_ID = None
 
-MODEL = "gemini-2.0-flash"
+MODEL = "gemini-3.6-flash"
 MAX_MESSAGE_LENGTH = 4000
 
 if not TELEGRAM_BOT_TOKEN or not GEMINI_API_KEY:
