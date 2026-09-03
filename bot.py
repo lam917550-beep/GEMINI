@@ -9,7 +9,6 @@ from google.genai import types
 from flask import Flask
 from pypdf import PdfReader
 from bs4 import BeautifulSoup
-from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from telegram import (
     Update,
@@ -32,7 +31,7 @@ app = Flask(__name__)
 
 @app.route('/')
 def home():
-    return "Ultra Telegram Gemini Bot (Optimized & Bug-Free) is active!"
+    return "Ultra Telegram Gemini Bot (JobQueue Optimized) is active!"
 
 @app.route('/health')
 def health():
@@ -58,8 +57,6 @@ MODEL = "gemini-2.5-flash"
 user_languages = {}     # user_id -> lang_code
 user_locations = {}     # user_id -> location string
 user_locks = {}
-
-scheduler = AsyncIOScheduler()
 
 SUPPORTED_LANGUAGES = {
     "en": "English", "vi": "Tiếng Việt", "es": "Español", "fr": "Français",
@@ -258,7 +255,6 @@ async def quiz_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     
-    # Lấy vị trí từ tham số lệnh hoặc từ user_locations đã lưu
     if context.args:
         location = " ".join(context.args)
     else:
@@ -290,6 +286,20 @@ async def weather_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             await update.message.reply_text("❌ Could not fetch weather data. Please try again with a valid location format." + BOT_FOOTER)
 
+async def alarm_callback(context: ContextTypes.DEFAULT_TYPE):
+    job = context.job
+    chat_id = job.chat_id
+    time_str = job.data['time_str']
+    location = job.data['location']
+    try:
+        await context.bot.send_message(
+            chat_id=chat_id,
+            text=f"⏰ **ALARM RINGING!**\nTime ({time_str}) reached! Location: {location}" + BOT_FOOTER,
+            parse_mode="Markdown"
+        )
+    except Exception:
+        pass
+
 async def clock_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
     if not context.args:
@@ -305,22 +315,20 @@ async def clock_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     location = user_locations.get(user_id, "Unknown location")
     
-    async def alarm_job():
-        try:
-            await context.bot.send_message(
-                chat_id=update.effective_chat.id,
-                text=f"⏰ **ALARM RINGING!**\nTime ({time_str}) reached! Location: {location}" + BOT_FOOTER,
-                parse_mode="Markdown"
-            )
-        except Exception:
-            pass
-
     now = datetime.datetime.now()
     target_dt = datetime.datetime.combine(now.date(), alarm_time)
     if target_dt <= now:
         target_dt += datetime.timedelta(days=1)
-
-    scheduler.add_job(alarm_job, 'date', run_date=target_dt)
+    
+    delay = (target_dt - now).total_seconds()
+    
+    context.job_queue.run_once(
+        alarm_callback, 
+        when=delay, 
+        chat_id=update.effective_chat.id, 
+        data={'time_str': time_str, 'location': location}
+    )
+    
     await update.message.reply_text(f"✅ Alarm set for **{time_str}** (Location: {location})." + BOT_FOOTER, parse_mode="Markdown")
 
 async def handle_quiz_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -370,7 +378,6 @@ async def chat(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text("❌ An error occurred. Please try again." + BOT_FOOTER, parse_mode="Markdown")
 
 def main():
-    scheduler.start()
     server_thread = threading.Thread(target=run_server, daemon=True)
     server_thread.start()
 
@@ -395,7 +402,7 @@ def main():
     
     application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, chat))
 
-    print("🤖 Ultra Telegram AI Bot with Weather, Language switcher & Static footer is running...")
+    print("🤖 Ultra Telegram AI Bot with Native JobQueue is running...")
     application.run_polling(drop_pending_updates=True)
 
 if __name__ == "__main__":
